@@ -1,0 +1,1476 @@
+// avr-libc library includes
+#include <avr/io.h> //  can be omitted
+#include <avr/interrupt.h> // can be omitted
+#define A 3
+#define B 2
+#define C 6
+#define D 8
+#define E 7
+#define F_SEG 4
+#define G 5
+int slg = 1;
+int slr = A3;
+int heat = A4;
+int buttPlus = 11;
+int buttSet = A1;
+int buttHour = 13;
+int buttMin = A0;
+int buttStart = A5;
+int buttStop = A2;
+int CA2 = 10;
+int CAC = 12;
+int CA1 = 9;
+int digitPlus = 0;
+int lastDigitPlus = 0;
+int lastValP = 0;
+int lastValS = 0;
+int lastValStart = 0;
+int valPlus = 0;
+int valSet = 0;
+int valMin = 0;
+int valStart = 0;
+int valStop = 0;
+int valHour = 0;
+int _heater_;
+const int segs[7] = { A, B, C, D, E, F_SEG, G };
+int a = 2, c = 2;
+int on;
+int off;
+bool val_set;
+bool main_loop = false;
+bool tot = false;
+bool start_1 = false;
+bool heater_1 = false;
+bool _total = false;
+bool tot_deb = false;
+bool set_time = false;
+bool counter_reset = true;
+bool hourLoop = false;
+bool main_Loop = false;
+bool _led_blink = false;
+bool _heat_count = false;
+bool stop_check = true;
+bool start_check = true;
+bool blink_start = true;
+bool blink_red = false;
+bool val_setup = false;
+bool resetMode = true;
+const byte numbersDig1 [10] = { 0b1000000, 0b1111001, 0b0100100, 0b0110000, 0b0011001, 0b0010010,
+0b0000010, 0b1111000, 0b0000000, 0b0010000 };
+const byte SEdisplay [3] = {0b0010010, 0b0000110, 0b0101111};
+int minDisplay [2];
+int digit1 = 0;
+int digit2 = 0;
+int min_digit1 = 0;
+int min_digit2 = 0;
+int hour_digit1 = 0;
+int hour_digit2 = 0;
+int clockMin = 0;
+int clockHour = 0;
+int hourDigit1 = 0;
+int hourDigit2 = 0;
+int heatStartDigit1 = 0;
+int heatStartDigit2 = 0;
+int heatStopDigit1 = 0;
+int heatStopDigit2 = 0;
+int StartDigit1 = 0;
+int StartDigit2 = 0;
+int StopDigit1 = 0;
+int StopDigit2 = 0;
+int stopHour = 0;
+int startHour = 0;
+int stop_Hour = 0;
+int start_Hour = 0;
+unsigned long int led_blink_count = 0;
+
+unsigned long int clockOvf = 0;
+
+unsigned long int heat_count;
+unsigned long int total_deb;
+
+void setup()
+{
+  pinMode(A, OUTPUT);
+  pinMode(B, OUTPUT);
+  pinMode(C, OUTPUT);
+  pinMode(D, OUTPUT);
+  pinMode(E, OUTPUT);
+  pinMode(F_SEG, OUTPUT);
+  pinMode(G, OUTPUT);
+  pinMode(CA1, OUTPUT);
+  pinMode(slg, OUTPUT);
+  pinMode(slr, OUTPUT);
+  pinMode(heat, OUTPUT);
+  pinMode(buttPlus, INPUT);
+  pinMode(buttSet, INPUT);
+  pinMode(buttHour, INPUT);
+  pinMode(buttMin, INPUT);
+  pinMode(buttStart, INPUT);
+  pinMode(buttStop, INPUT);
+  pinMode(CA2, OUTPUT);
+  pinMode(CAC, OUTPUT);
+  
+
+
+
+cli();         // disable global interrupts
+
+TCCR0A = 0;
+TCCR0B = 0;
+TCCR1A = 0;    // set entire TCCR1A register to 0
+TCCR1B = 0;
+TCCR2A = 0;
+TCCR2B = 0;
+
+TCNT0 = 0;
+TCNT1 = 0;
+TCNT2 = 0;
+
+// enable Timer1 overflow interrupt:
+TIMSK0 = 0b00000001;
+TIMSK1 |= (1 << TOIE1);
+TIMSK2 = 0b00000001;
+
+TCCR0B |= (1 << CS02)|(0 << CS01)|(1 << CS00);
+TCCR1B |= (1 << CS12)|(0 << CS11)|(1 << CS10);
+TCCR2B |= (1 << CS22)|(1 << CS21)|(1 << CS20);
+// enable global interrupts:
+sei();
+}
+
+
+
+
+ISR (TIMER2_OVF_vect)
+{
+  
+total_deb++;
+
+if(_led_blink == true)
+{
+led_blink_count++;
+}
+
+if(_heat_count == true)
+{
+heat_count++;
+}
+}
+
+ISR (TIMER1_OVF_vect)
+{
+  
+clockOvf++;
+  
+}
+
+ void loop(){
+  
+  if(resetMode == true)
+  {
+  while(1)
+  {
+    digitalWrite(heat, HIGH);
+    _led_blink = true;
+    led_blink_start(slr);
+    valHour = digitalRead(buttHour);
+    if(valHour == HIGH)
+    {
+      digitalWrite(heat, LOW);
+    digitalWrite(slr, LOW);
+      resetMode = false;
+      break;
+    }
+    
+  }
+  }
+  _led_blink = true;
+  led_blink_start(slr);
+  flip_hour_set();
+   
+   valHour = digitalRead(buttHour);                        //MINUTE SET
+  if(valHour == HIGH)
+  {
+    
+      while(1)
+      {
+        flip_hour_set();
+        led_blink_start(slr);
+        digitalWrite(CAC, HIGH);
+        valHour = digitalRead(buttHour);
+        
+        if(valHour == LOW)
+        {
+           break;
+        }
+      }
+      
+        while(1){       
+          
+         hour_loop: 
+
+         if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+         
+         if(hourLoop == true)
+          {
+          clock_main(clockMin);
+          hour_display(clockHour);
+          flip_hour_display();
+          }
+          else
+          {
+        flip_hour_set();
+          }
+          valPlus = digitalRead(buttPlus);
+          valMin = digitalRead(buttMin);
+
+          if(valPlus == HIGH){
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            // HOUR PLUS loop
+      {
+        if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+        if(hourLoop == true)
+          {
+          clock_main(clockMin);
+          hour_display(clockHour);
+          flip_hour_display();
+          }
+          else
+          {
+        flip_hour_set();
+          }
+        valPlus = digitalRead(buttPlus);
+        
+        if((total_deb >= 5) && (valPlus == HIGH))
+      {
+      
+     
+     
+      
+        if(hourLoop == true)
+          {
+          clock_main(clockMin);
+          }
+
+          digit_count_hour();
+        total_deb =0;
+        TCNT2 = 0;
+       
+       
+        
+      
+      }
+
+      if(valPlus == LOW)
+      {
+        break;
+      }
+      
+
+ 
+      }
+          }
+          
+
+      if(hourLoop == true)
+      {
+          valSet = digitalRead(buttSet);
+      if(valSet == HIGH)
+      {
+        digitalWrite(CAC, LOW);
+        set_time = false;
+        goto mainLoop;
+      }
+      }
+
+      else{
+          
+    valMin = digitalRead(buttMin);                                  // MINUTE PLUS LOOP
+
+      if(valMin == HIGH)
+      {
+        while(1)
+        {
+          minLoop:
+          if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          if(main_Loop == true)
+          {
+          min_display(clockMin);
+          flip_min_display();
+          }
+          else
+          {
+          flip_min_set();
+          }
+          
+        valPlus = digitalRead(buttPlus);
+        if(valPlus == HIGH){
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+        
+        if(main_Loop == true)
+          {
+          min_display(clockMin);
+          flip_min_display();
+          }
+          else
+          {
+          flip_min_set();
+          }
+        valPlus = digitalRead(buttPlus);
+
+        
+        
+        if((total_deb >= 5) && (valPlus == HIGH))
+      {
+      
+     
+     
+      digit_count_min();
+      if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+        total_deb =0;
+       TCNT2 = 0;
+       
+        
+      
+      }
+
+      if(valPlus == LOW)
+      {
+        break;
+      }
+      
+      }
+ 
+      }
+
+      valSet = digitalRead(buttSet);
+      if(valSet == HIGH)
+      {
+        if(main_Loop == true)
+        {
+        digitalWrite(CAC, LOW);
+        set_time = false;
+        clockOvf = 0;
+        TCNT1 = 0;
+        goto mainLoop;
+        }
+
+        else
+        {
+        digitalWrite(CAC, LOW);
+        set_time = false;
+        clockOvf = 0;
+        TCNT1 = 0;
+        goto setLoop;
+        }
+      }
+        }
+      }
+
+      }
+          
+          setLoop:
+          if(valSet == HIGH){ 
+                                                            // SET LOOP
+
+             while(1)
+             {
+               clock_main(clockMin);
+               counter_reset = false;
+               if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+               total_deb = 0;
+               digitalWrite(CAC, LOW);
+               
+                
+               
+              valStart = digitalRead(buttStart);
+              
+              err_set_loop:
+              if(set_time == true)
+              {
+                while(1){
+                  clock_main(clockMin);
+                  
+                flip_seDisplay_set();
+                digitalWrite(CAC, HIGH);
+                valStart = digitalRead(buttStart);
+                if(valStart == HIGH)
+                {
+                  break;
+                }
+
+                valStop = digitalRead(buttStop);
+                if(valStop == HIGH)
+                {
+                  goto stop_loop;
+                }
+
+                valHour = digitalRead(buttHour);
+                if(valHour == HIGH)
+                {
+                  hourLoop = true;
+                  blink_start = false;
+                  goto hour_loop;
+                }
+
+                valMin = digitalRead(buttMin);
+                if(valMin == HIGH)
+                {
+                  main_Loop = true;
+                  blink_start = false;
+                  goto minLoop;
+                }
+
+                valSet = digitalRead(buttSet);
+
+                if(valSet == LOW)
+                {
+                  val_setup = true;
+                }
+
+                if(val_setup == true)
+                {
+                  valSet = digitalRead(buttSet);
+                if(valSet == HIGH)
+                {
+                  digitalWrite(CAC, LOW);
+                  goto mainLoop;
+                }
+
+                }
+        
+              }
+              }
+
+              valStop = digitalRead(buttStop);
+                if(valStop == HIGH)
+                {
+                  goto stop_loop;
+                }
+                
+              if(valStart == HIGH){                                         // START loop
+
+                while(1)
+      {
+        start_loop:
+        clock_main(clockMin);
+        
+        flip_heatStart_set();
+        if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+        
+        digitalWrite(CAC, HIGH);
+        valStart = digitalRead(buttStart);
+        if(valStart == LOW)
+        {
+          break;
+        }
+      }
+
+      while(1){
+        clock_main(clockMin);
+        
+        flip_heatStart_set();
+        if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          
+        valPlus = digitalRead(buttPlus);
+      if(valPlus == HIGH){
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        clock_main(clockMin);
+        
+               
+        flip_heatStart_set();
+        valPlus = digitalRead(buttPlus);
+
+        
+        
+        if((total_deb >= 5) && (valPlus == HIGH))
+      {
+      
+     clock_main(clockMin);
+       if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          
+     
+      digit_count_start();
+        total_deb =0;
+       TCNT2 = 0;
+       
+        
+      
+      }
+
+      if(valPlus == LOW)
+      {
+        break;
+      }
+      
+      }
+ 
+      }
+      valSet = digitalRead(buttSet);
+      if(valSet == HIGH)
+      {
+        digitalWrite(CAC, LOW);
+        val_set = false;
+        start_Hour = startHour;
+        stop_Hour = stopHour;
+        if((stopHour) <= (startHour) && (stopHour != 0) && (startHour != 0))
+        {
+          while(1)
+          {
+            clock_main(clockMin);
+            digitalWrite(CAC, HIGH);
+            flip_erDisplay_set();
+            
+            
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        clock_main(clockMin);
+        flip_erDisplay_set();
+        
+        
+        if(total_deb >= 125)
+     
+      {
+     
+                  
+                  goto start_loop;
+                  
+      }
+      
+      
+
+ 
+      }
+          
+          }
+        }
+        goto mainLoop;
+      }
+
+      valStop = digitalRead(buttStop);                                  // STOP LOOP
+
+      if(valStop == HIGH)
+      {
+        while(1)
+        {
+          
+          valStart = digitalRead(buttStart);
+                if(valStart == HIGH)
+                {
+                  goto start_loop;
+                }
+          stop_loop:
+          clock_main(clockMin);
+        
+
+           digitalWrite(CAC, HIGH);
+          flip_heatStop_set();
+          if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          
+        valPlus = digitalRead(buttPlus);
+        if(valPlus == HIGH){
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        clock_main(clockMin);
+        
+        flip_heatStop_set();
+        if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          
+        valPlus = digitalRead(buttPlus);
+
+        
+        
+        if((total_deb >= 5) && (valPlus == HIGH))
+      {
+      
+     
+     clock_main(clockMin);
+      digit_count_stop();
+      if(blink_start == true)
+          {
+          led_blink_start(slr);
+          }
+          
+        total_deb =0;
+       TCNT2 = 0;
+       
+        
+        
+      
+      }
+
+      if(valPlus == LOW)
+      {
+        break;
+      }
+      
+      }
+ 
+      }
+
+      valSet = digitalRead(buttSet);
+      if(valSet == HIGH)
+      {
+        digitalWrite(CAC, LOW);
+        val_set = false;
+        start_Hour = startHour;
+        stop_Hour = stopHour;
+        if((stopHour) <= (startHour) && (stopHour != 0) && (startHour != 0))
+        {
+          while(1)
+          {
+            clock_main(clockMin);
+            digitalWrite(CAC, HIGH);
+            flip_erDisplay_set();
+             _heater_ = digitalRead(heat);
+            
+            
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        clock_main(clockMin);
+        flip_erDisplay_set();
+        
+        
+        if(total_deb >= 125)
+     
+      {
+     
+                  
+                  goto stop_loop;
+                  
+      }
+      
+      
+
+ 
+      }
+          
+          }
+        }
+        goto mainLoop;
+      }
+        }
+      }
+
+
+      
+      }
+
+              }
+
+              if(main_loop == true)
+          {
+           while(1){                                          //  MAIN LOOP
+
+                mainLoop:
+
+                blink_start = false;
+                _led_blink = false;
+                led_blink_count = 0;
+
+                while(1)
+                {
+                  clock_main(clockMin);
+                  heater(start_Hour, stop_Hour);
+                  valSet = digitalRead(buttSet);
+
+          
+             if(valSet == LOW)
+             {
+              digitalWrite(CAC, LOW);
+                  break;
+             }
+                }
+
+              total_deb = 0;
+                clock_main(clockMin);
+                heater(start_Hour, stop_Hour);
+              digitalWrite(CAC, LOW);  
+             valHour = digitalRead(buttHour);
+             valMin = digitalRead(buttMin);
+             valStart = digitalRead(buttStart);
+             valStop = digitalRead(buttStop);
+             valSet = digitalRead(buttSet);
+
+            if(valSet == HIGH)
+            
+            {
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            // SET in main loop
+      {
+        clock_main(clockMin);
+        heater(start_Hour, stop_Hour);
+        valSet = digitalRead(buttSet);
+        
+        if(total_deb >= 3)
+     
+      {
+     
+     main_loop = false;
+     blink_red = false;
+                    blink_start = false;
+                  set_time = true;
+                  val_setup = false;
+                  goto err_set_loop;
+                  
+      }
+      
+      if(valSet == LOW)
+          {
+            break;
+          }
+
+ 
+      }
+          }
+
+          if(valStart == LOW)
+          {
+            stop_check = true;
+          }
+
+          if(valStop == LOW)
+          {
+            start_check = true;
+          }
+          
+             
+
+          if(valHour == HIGH){                          // CHECK HOUR
+          while(1)
+          {
+            clock_main(clockMin);
+            heater(start_Hour, stop_Hour);
+            digitalWrite(CAC, HIGH);
+            hour_display(clockHour);
+               flip_hour_display();
+               valHour = digitalRead(buttHour);
+
+          if(valHour == LOW)
+          {
+            break;
+          }
+          }
+             
+          } 
+
+          
+
+        if(valMin == HIGH){                             // CHECK MINUTE
+          while(1)
+          {
+            clock_main(clockMin);
+            heater(start_Hour, stop_Hour);
+            digitalWrite(CAC, HIGH);
+            min_display(clockMin);
+               flip_min_display();
+               valMin = digitalRead(buttMin);
+
+          if(valMin == LOW)
+          {
+            break;
+          }
+          }
+             
+          }
+          
+                 
+                                       // CHECK START
+        if(stop_check == true)
+
+        {
+        
+          valStart = digitalRead(buttStart);
+            
+          if(valStart == HIGH){
+              _heat_count = true;
+              heat_count = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        
+        clock_main(clockMin);
+        digitalWrite(CAC, HIGH);
+        heater(start_Hour, stop_Hour);
+        flip_heatStart_set();
+        
+        valStart = digitalRead(buttStart);
+        
+        if(heat_count >= 120)
+        
+     
+      {
+        
+        heat_count = 0;
+       led_blink_count = 0; 
+     TCNT2 = 0;
+     
+     while(1)
+     {
+      clock_main(clockMin);
+      digitalWrite(CAC, LOW);
+      digitalWrite(heat, HIGH);
+      digitalWrite(slg, LOW);
+      
+  _led_blink = true;
+      led_blink(slr);
+  
+      if(heat_count >= 54932 )
+      {
+        _heat_count = false;
+        heat_count = 0;
+        break;
+      }
+      
+      valStop = digitalRead(buttStop);
+      if(valStop == HIGH)
+          {
+            start_check = false;
+            _led_blink = false;
+            led_blink_count = 0;
+            break;
+          }
+      
+     }
+                  
+      }
+          if(valStart == LOW)
+          {
+            break;
+          }
+          }
+             
+          } 
+
+        }
+          
+        if(start_check == true)
+
+        {
+          valStop = digitalRead(buttStop);
+          
+          if(valStop == HIGH){                             // CHECK STOP
+          while(1)
+          {
+            clock_main(clockMin);
+            heater(start_Hour, stop_Hour);
+            digitalWrite(CAC, HIGH);
+            
+               flip_heatStop_set();
+valStop = digitalRead(buttStop);
+               if(valStop == HIGH){
+              total_deb = 0;
+              TCNT2 = 0;
+              while(1)                                                            
+      {
+        clock_main(clockMin);
+        flip_heatStop_set();
+        valStop = digitalRead(buttStop);
+        
+        if(total_deb >= 120)
+     
+      {
+     
+     while(1)
+     {
+      clock_main(clockMin);
+      digitalWrite(CAC, LOW);
+      digitalWrite(heat, LOW);
+      digitalWrite(slr, LOW);
+      total_deb = 0;
+      _led_blink = true;
+      led_blink(slg);
+      valStart = digitalRead(buttStart);
+      if(valStart == HIGH)
+          {
+            stop_check = false;
+            _led_blink = false;
+            led_blink_count = 0;
+            break;
+          }
+      
+     }
+                  
+      }
+      
+      if(valStop == LOW)
+          {
+            break;
+          }
+
+ 
+      }
+          }
+               valStop = digitalRead(buttStop);
+
+          if(valStop == LOW)
+          {
+            break;
+          }
+          }
+             
+          }
+
+        }
+
+           } 
+
+          }
+      } 
+          } 
+       
+        
+          
+          
+          }
+
+    }
+  
+
+ 
+ 
+                                                                            
+  
+  
+
+ }
+ 
+
+void digit_count_min()                        // pomak minute
+{
+  clockMin++;
+  if(clockMin >= 60)
+  {
+    clockMin = 0;
+  }
+
+  digit1++;
+      if(digit1 == 10)
+      {
+        digit1 = 0;
+        digit2++;
+        if(digit2 == 6)
+      {
+        digit2 = 0;
+      }
+      }
+}
+
+void digit_count_hour()                      // pomak sata
+{
+  clockHour++;
+  
+
+  hourDigit1++;
+      if(hourDigit1 >= 10)
+      {
+        hourDigit1 = 0;
+        hourDigit2++;
+        if(hourDigit2 >= 3)
+      {
+        hourDigit2 = 0;
+      }
+      }
+
+      if(clockHour == 24)
+  {
+    clockHour = 0;
+    hourDigit1 = 0;
+    hourDigit2 = 0;
+  }
+}
+
+void digit_count_start()                      // pomak starta
+{
+  startHour++;
+  
+
+  heatStartDigit1++;
+      if(heatStartDigit1 >= 10)
+      {
+        heatStartDigit1 = 0;
+        heatStartDigit2++;
+        if(heatStartDigit2 >= 3)
+      {
+        heatStartDigit2 = 0;
+      }
+      }
+
+      if(startHour == 24)
+  {
+    startHour = 0;
+    heatStartDigit1 = 0;
+    heatStartDigit2 = 0;
+  }
+}
+
+void digit_count_stop()                      // pomak stopa
+{
+  stopHour++;
+  
+
+  heatStopDigit1++;
+      if(heatStopDigit1 >= 10)
+      {
+        heatStopDigit1 = 0;
+        heatStopDigit2++;
+        if(heatStopDigit2 >= 3)
+      {
+        heatStopDigit2 = 0;
+      }
+      }
+
+      if(stopHour == 24)
+  {
+    stopHour = 0;
+    heatStopDigit1 = 0;
+    heatStopDigit2 = 0;
+  }
+}
+
+void flip_min_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[digit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[digit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_hour_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[hourDigit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[hourDigit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_min_display()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[min_digit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[min_digit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_hour_display()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[hour_digit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[hour_digit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_heatStart_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[heatStartDigit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[heatStartDigit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_heatStop_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(numbersDig1[heatStopDigit1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(numbersDig1[heatStopDigit2]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_seDisplay_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(SEdisplay[1]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(SEdisplay[0]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+void flip_erDisplay_set()
+{
+  
+  if ( a % 2 == 0 ){
+  
+  if (TCNT0 >=150)
+  {
+    lightSegments1(SEdisplay[2]);
+    digitalWrite(CA1, LOW);
+    digitalWrite(CA2, HIGH);
+    
+    TCNT0 = 0;
+    a++;
+    
+    }
+
+}
+if ( a % 2 == 1 )
+{
+ if (TCNT0 >=150)
+ {
+  
+lightSegments1(SEdisplay[1]);
+    digitalWrite(CA2, LOW);
+    digitalWrite(CA1, HIGH);
+    
+    TCNT0 = 0;
+    a = 2;
+}
+}
+}
+
+
+
+void lightSegments1(byte number1) {
+  for (int i = 0; i < 7; i++) {
+    int bit = bitRead(number1, i);
+    digitalWrite(segs[i], bit);
+ 
+  }
+}
+
+void clock_main(int _clock)
+{
+  if(clockOvf >= 14)
+  {
+    if(TCNT1 >= 19800
+    )
+    {
+      clockMin++;
+      TCNT1 = 0;
+      clockOvf = 0;
+    }
+
+    if(clockMin == 60)
+  {
+    clockMin = 0;
+    clockHour++;
+  }
+
+  if(clockHour == 24)
+  {
+     clockHour = 0;
+  }
+}
+
+}
+
+void min_display(int _min_Display)
+{
+
+  int _minDisplay[2];
+
+for (int i = 1; i >= 0; i--) {
+    _minDisplay[i] = _min_Display % 10;
+    _min_Display /= 10;
+}
+ min_digit1 = _minDisplay[1];
+ min_digit2 = _minDisplay[0];
+
+}
+
+void hour_display(int _hour_Display)
+{
+
+  int _hourDisplay[2];
+
+for (int i = 1; i >= 0; i--) {
+    _hourDisplay[i] = _hour_Display % 10;
+    _hour_Display /= 10;
+}
+ hour_digit1 = _hourDisplay[1];
+ hour_digit2 = _hourDisplay[0];
+
+}
+
+void heater (int _start, int _stop)
+{
+  if(_stop == 0)
+  {
+    _stop = 24;
+  }
+  if((clockHour >= _start) && (clockHour < _stop ))
+  {
+    digitalWrite(heat, HIGH);
+    digitalWrite(slr, HIGH);
+    digitalWrite(slg, LOW);
+  }
+  else
+  {
+    digitalWrite(heat, LOW);
+    digitalWrite(slg, HIGH);
+    digitalWrite(slr, LOW);
+  }
+}
+
+void led_blink(int _led)
+{
+  
+  if ( c % 2 == 0 ){
+  
+  if (led_blink_count >=70)
+  {
+    
+    digitalWrite(_led, HIGH);
+    led_blink_count = 0;
+    
+    c++;
+    
+    }
+
+}
+if ( c % 2 == 1 )
+{
+ if (led_blink_count >=5)
+ {
+  
+    digitalWrite(_led, LOW);
+    led_blink_count = 0;
+    
+    c = 2;
+}
+}
+}
+
+void led_blink_start(int _led)
+{
+  
+  if ( c % 2 == 0 ){
+  
+  if (led_blink_count >=10)
+  {
+    
+    digitalWrite(_led, HIGH);
+    led_blink_count = 0;
+    
+    c++;
+    
+    }
+
+}
+if ( c % 2 == 1 )
+{
+ if (led_blink_count >=10)
+ {
+  
+    digitalWrite(_led, LOW);
+    led_blink_count = 0;
+    
+    c = 2;
+}
+}
+}
+
